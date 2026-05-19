@@ -99,58 +99,41 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # =========================================================
 
 def extract_draws_from_pdf(pdf_bytes: bytes) -> pd.DataFrame:
-
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-
-    result_pattern = re.compile(
-        r"^\s*((?:\d{1,2}\s+){5}\d{1,2})\s*$"
-    )
-
-    draw_pattern = re.compile(r"^\s*(\d{4})\s*$")
-
     rows = []
 
     for page_index, page in enumerate(doc):
-
         text = page.get_text("text")
+        tokens = re.findall(r"\d{1,4}", text)
 
-        lines = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip()
-        ]
-
-        results = []
         draw_ids = []
+        numbers = []
 
-        for line in lines:
+        for token in tokens:
+            value = int(token)
 
-            mr = result_pattern.match(line)
+            if 1000 <= value <= 9999:
+                draw_ids.append(value)
 
-            if mr:
-                nums = [int(x) for x in mr.group(1).split()]
+            elif 1 <= value <= 49:
+                numbers.append(value)
 
-                if (
-                    len(nums) == 6
-                    and all(1 <= n <= 49 for n in nums)
-                    and len(set(nums)) == 6
-                ):
-                    results.append(sorted(nums))
-                    continue
+        clean_results = []
 
-            md = draw_pattern.match(line)
+        buffer = []
 
-            if md:
-                draw_id = int(md.group(1))
+        for n in numbers:
+            buffer.append(n)
 
-                if 1000 <= draw_id <= 9999:
-                    draw_ids.append(draw_id)
+            if len(buffer) == 6:
+                if len(set(buffer)) == 6:
+                    clean_results.append(sorted(buffer))
+                buffer = []
 
-        count = min(len(results), len(draw_ids))
+        count = min(len(draw_ids), len(clean_results))
 
         for i in range(count):
-
-            nums = results[i]
+            nums = clean_results[i]
 
             rows.append({
                 "page": page_index + 1,
@@ -166,19 +149,16 @@ def extract_draws_from_pdf(pdf_bytes: bytes) -> pd.DataFrame:
 
     if not rows:
         raise ValueError(
-            "Could not extract draws from PDF."
+            "Nie udało się odczytać losowań z PDF. "
+            "Sprawdź, czy PDF zawiera tekst, a nie sam obraz."
         )
 
     df = pd.DataFrame(rows)
-
     df = df.drop_duplicates(subset=["draw_id"])
-
     df = df.sort_values("draw_id", ascending=True)
-
     df = df.reset_index(drop=True)
 
     return df
-
 
 # =========================================================
 # HOT NUMBERS
