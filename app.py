@@ -1,3 +1,8 @@
+#==========================================================
+#Ten plik czyta historię od najstarszej do najnowszej
+#Gdzie najnowsza jest na samym końcu
+#==========================================================
+
 import re
 import itertools
 from collections import Counter, defaultdict
