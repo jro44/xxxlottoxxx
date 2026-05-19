@@ -103,55 +103,73 @@ def extract_draws_from_pdf(pdf_bytes: bytes) -> pd.DataFrame:
     rows = []
 
     for page_index, page in enumerate(doc):
-        text = page.get_text("text")
-        tokens = re.findall(r"\d{1,4}", text)
+        words = page.get_text("words")
 
-        draw_ids = []
-        numbers = []
+        items = []
 
-        for token in tokens:
-            value = int(token)
+        for w in words:
+            x0, y0, x1, y1, text = w[:5]
 
-            if 1000 <= value <= 9999:
-                draw_ids.append(value)
+            if re.fullmatch(r"\d{1,4}", text):
+                items.append((x0, y0, text))
 
-            elif 1 <= value <= 49:
-                numbers.append(value)
+        items = sorted(items, key=lambda x: (x[1], x[0]))
 
-        clean_results = []
+        line_groups = []
+        tolerance_y = 3.0
 
-        buffer = []
+        for item in items:
+            x, y, text = item
 
-        for n in numbers:
-            buffer.append(n)
+            if not line_groups:
+                line_groups.append({
+                    "y": y,
+                    "items": [item]
+                })
+            else:
+                last_group = line_groups[-1]
 
-            if len(buffer) == 6:
-                if len(set(buffer)) == 6:
-                    clean_results.append(sorted(buffer))
-                buffer = []
+                if abs(last_group["y"] - y) <= tolerance_y:
+                    last_group["items"].append(item)
+                    last_group["y"] = sum(i[1] for i in last_group["items"]) / len(last_group["items"])
+                else:
+                    line_groups.append({
+                        "y": y,
+                        "items": [item]
+                    })
 
-        count = min(len(draw_ids), len(clean_results))
+        for group in line_groups:
+            line_items = sorted(group["items"], key=lambda x: x[0])
 
-        for i in range(count):
-            nums = clean_results[i]
+            draw_ids = []
+            nums = []
 
-            rows.append({
-                "page": page_index + 1,
-                "draw_id": draw_ids[i],
-                "numbers": nums,
-                "n1": nums[0],
-                "n2": nums[1],
-                "n3": nums[2],
-                "n4": nums[3],
-                "n5": nums[4],
-                "n6": nums[5],
-            })
+            for x, y, text in line_items:
+                value = int(text)
+
+                if 1000 <= value <= 9999 and x < 35:
+                    draw_ids.append(value)
+
+                elif 1 <= value <= 49 and x > 25:
+                    nums.append(value)
+
+            if len(draw_ids) == 1 and len(nums) == 6 and len(set(nums)) == 6:
+                nums = sorted(nums)
+
+                rows.append({
+                    "page": page_index + 1,
+                    "draw_id": draw_ids[0],
+                    "numbers": nums,
+                    "n1": nums[0],
+                    "n2": nums[1],
+                    "n3": nums[2],
+                    "n4": nums[3],
+                    "n5": nums[4],
+                    "n6": nums[5],
+                })
 
     if not rows:
-        raise ValueError(
-            "Nie udało się odczytać losowań z PDF. "
-            "Sprawdź, czy PDF zawiera tekst, a nie sam obraz."
-        )
+        raise ValueError("Nie udało się odczytać losowań z PDF.")
 
     df = pd.DataFrame(rows)
     df = df.drop_duplicates(subset=["draw_id"])
