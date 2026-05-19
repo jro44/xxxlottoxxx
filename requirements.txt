@@ -1,0 +1,7 @@
+streamlit==1.39.0
+pymupdf==1.24.10
+pandas==2.2.3
+numpy==2.1.2
+altair==5.4.1
+python-dateutil==2.9.0.post0
+watchdog==5.0.3
